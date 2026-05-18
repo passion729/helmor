@@ -245,6 +245,11 @@ export type AppSettings = {
 	 *  `CONTEXT_USAGE_AUTO_REVEAL_THRESHOLD`. */
 	alwaysShowContextUsage: boolean;
 	showUsageStats: boolean;
+	/** Opt-in: when the workspace's linked PR/MR transitions to merged,
+	 *  attempt to archive the workspace automatically. One-shot — runs
+	 *  exactly once at the merged-edge; skipped if the workspace has an
+	 *  active agent session or fails archive validation. */
+	autoArchiveOnMerge: boolean;
 	onboardingCompleted: boolean;
 	shortcuts: ShortcutOverrides;
 	claudeCustomProviders: ClaudeCustomProviderSettings;
@@ -310,6 +315,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	claudeThinkingDisplay: "summarized",
 	alwaysShowContextUsage: true,
 	showUsageStats: true,
+	autoArchiveOnMerge: false,
 	onboardingCompleted: false,
 	shortcuts: {},
 	claudeCustomProviders: {
@@ -454,6 +460,7 @@ const SETTINGS_KEY_MAP: Record<
 	claudeThinkingDisplay: "app.claude_thinking_display",
 	alwaysShowContextUsage: "app.always_show_context_usage",
 	showUsageStats: "app.show_usage_stats",
+	autoArchiveOnMerge: "app.auto_archive_on_merge",
 	onboardingCompleted: "app.onboarding_completed",
 	shortcuts: "app.shortcuts",
 	claudeCustomProviders: "app.claude_custom_providers",
@@ -1002,6 +1009,10 @@ export async function loadSettings(): Promise<AppSettings> {
 				raw[SETTINGS_KEY_MAP.showUsageStats] !== undefined
 					? raw[SETTINGS_KEY_MAP.showUsageStats] === "true"
 					: DEFAULT_SETTINGS.showUsageStats,
+			autoArchiveOnMerge:
+				raw[SETTINGS_KEY_MAP.autoArchiveOnMerge] !== undefined
+					? raw[SETTINGS_KEY_MAP.autoArchiveOnMerge] === "true"
+					: DEFAULT_SETTINGS.autoArchiveOnMerge,
 			onboardingCompleted:
 				raw[SETTINGS_KEY_MAP.onboardingCompleted] !== undefined
 					? raw[SETTINGS_KEY_MAP.onboardingCompleted] === "true"
