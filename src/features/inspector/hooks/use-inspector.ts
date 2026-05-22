@@ -356,7 +356,7 @@ export function useWorkspaceInspectorSidebar({
 		...workspaceChangesQueryOptions(workspaceRootPath ?? ""),
 		enabled: changesQueryEnabled,
 	});
-	const changes: InspectorFileItem[] = changesQuery.data?.items ?? [];
+	const changes: InspectorFileItem[] = changesQuery.data ?? [];
 
 	const prevChangesRef = useRef<Map<string, string> | null>(null);
 	const prevRootPathRef = useRef(workspaceRootPath);
@@ -398,16 +398,6 @@ export function useWorkspaceInspectorSidebar({
 	useEffect(() => {
 		prevChangesRef.current = nextChangesSnapshot;
 	}, [nextChangesSnapshot]);
-
-	useEffect(() => {
-		const prefetched = changesQuery.data?.prefetched;
-		if (!prefetched?.length) {
-			return;
-		}
-		void import("@/lib/monaco-runtime").then(({ preWarmFileContents }) => {
-			preWarmFileContents(prefetched);
-		});
-	}, [changesQuery.data]);
 
 	const handleToggleTabs = useCallback(() => {
 		setTabsOpen((open) => !open);

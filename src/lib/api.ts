@@ -449,16 +449,6 @@ export type EditorFileStatResponse = {
 	size: number | null;
 };
 
-export type EditorFilePrefetchItem = {
-	absolutePath: string;
-	content: string;
-};
-
-export type EditorFilesWithContentResponse = {
-	items: InspectorFileItem[];
-	prefetched: EditorFilePrefetchItem[];
-};
-
 export type AppUpdateStage =
 	| "disabled"
 	| "idle"
@@ -1920,27 +1910,13 @@ export async function listWorkspaceFiles(
 	}
 }
 
-export async function listEditorFilesWithContent(
+export async function listWorkspaceChanges(
 	workspaceRootPath: string,
-): Promise<EditorFilesWithContentResponse> {
+): Promise<InspectorFileItem[]> {
 	try {
-		return await invoke<EditorFilesWithContentResponse>(
-			"list_editor_files_with_content",
-			{ workspaceRootPath },
-		);
-	} catch (error) {
-		throw new Error(describeInvokeError(error, "Unable to list editor files."));
-	}
-}
-
-export async function listWorkspaceChangesWithContent(
-	workspaceRootPath: string,
-): Promise<EditorFilesWithContentResponse> {
-	try {
-		return await invoke<EditorFilesWithContentResponse>(
-			"list_workspace_changes_with_content",
-			{ workspaceRootPath },
-		);
+		return await invoke<InspectorFileItem[]>("list_workspace_changes", {
+			workspaceRootPath,
+		});
 	} catch (error) {
 		throw new Error(
 			describeInvokeError(error, "Unable to list workspace changes."),
