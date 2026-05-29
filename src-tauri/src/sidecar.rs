@@ -82,6 +82,35 @@ pub struct BundledAgentPaths {
     pub codex_bin: Option<PathBuf>,
 }
 
+const CLAUDE_EXECUTABLE_SETTING_KEY: &str = "app.claude_executable_path";
+
+pub fn load_claude_executable_override() -> Option<PathBuf> {
+    let value = crate::models::settings::load_setting_value(CLAUDE_EXECUTABLE_SETTING_KEY)
+        .ok()
+        .flatten()?;
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
+}
+
+pub fn resolve_claude_executable_path() -> PathBuf {
+    if let Some(path) = load_claude_executable_override() {
+        return path;
+    }
+    resolve_bundled_agent_paths()
+        .claude_bin
+        .unwrap_or_else(|| PathBuf::from("claude"))
+}
+
+pub fn claude_executable_override_is_reclaude() -> bool {
+    load_claude_executable_override()
+        .and_then(|path| {
+            path.file_stem()
+                .and_then(|value| value.to_str())
+                .map(str::to_owned)
+        })
+        .is_some_and(|stem| stem.eq_ignore_ascii_case("reclaude"))
+}
+
 /// Resolve the bundled Claude/Codex CLI binaries shipped inside the
 /// `.app` (release builds only — returns empty in dev). Used both by
 /// the sidecar boot path (to pass `HELMOR_*_BIN_PATH` env vars) and by
@@ -184,9 +213,10 @@ impl SidecarProcess {
                 codex_bin = ?bundled_paths.codex_bin,
                 "Resolved bundled agent paths"
             );
-            if let Some(path) = bundled_paths.claude_bin {
-                cmd.env("HELMOR_CLAUDE_CODE_BIN_PATH", &path);
-            }
+            cmd.env(
+                "HELMOR_CLAUDE_CODE_BIN_PATH",
+                resolve_claude_executable_path(),
+            );
             if let Some(path) = bundled_paths.codex_bin {
                 cmd.env("HELMOR_CODEX_BIN_PATH", &path);
             }
@@ -444,15 +474,16 @@ impl ManagedSidecar {
 
             // Push saved key so the first cursor request finds it set.
             // Best-effort: failures fall through to the "not configured" error.
-            if let Some(key) = load_cursor_api_key() {
-                let init = SidecarRequest {
-                    id: Uuid::new_v4().to_string(),
-                    method: "updateConfig".to_string(),
-                    params: serde_json::json!({ "cursorApiKey": key }),
-                };
-                if let Err(error) = guard.as_ref().unwrap().send(&init) {
-                    tracing::warn!("Initial Cursor key push failed: {error}");
-                }
+            let init = SidecarRequest {
+                id: Uuid::new_v4().to_string(),
+                method: "updateConfig".to_string(),
+                params: serde_json::json!({
+                    "cursorApiKey": load_cursor_api_key(),
+                    "claudeExecutablePath": load_claude_executable_override(),
+                }),
+            };
+            if let Err(error) = guard.as_ref().unwrap().send(&init) {
+                tracing::warn!("Initial sidecar config push failed: {error}");
             }
         }
 
@@ -462,6 +493,18 @@ impl ManagedSidecar {
     /// Hot-push Cursor API key (or null) via `updateConfig`. Best-effort;
     /// no-op when sidecar isn't running — next spawn will pick it up.
     pub fn push_cursor_api_key(&self, key: Option<String>) {
+        self.push_runtime_config(serde_json::json!({
+            "cursorApiKey": key,
+        }));
+    }
+
+    pub fn push_claude_executable_path(&self, path: Option<PathBuf>) {
+        self.push_runtime_config(serde_json::json!({
+            "claudeExecutablePath": path,
+        }));
+    }
+
+    fn push_runtime_config(&self, params: serde_json::Value) {
         let mut guard = match self.process.lock() {
             Ok(g) => g,
             Err(e) => {
@@ -478,12 +521,10 @@ impl ManagedSidecar {
         let request = SidecarRequest {
             id: Uuid::new_v4().to_string(),
             method: "updateConfig".to_string(),
-            params: serde_json::json!({
-                "cursorApiKey": key,
-            }),
+            params,
         };
         if let Err(error) = process.send(&request) {
-            tracing::warn!("Failed to push Cursor API key to sidecar: {error}");
+            tracing::warn!("Failed to push runtime config to sidecar: {error}");
         }
     }
 
