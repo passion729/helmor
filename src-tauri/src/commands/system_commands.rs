@@ -1302,7 +1302,7 @@ fn kimi_login_ready() -> bool {
 fn resolve_agent_binary(provider: &str) -> PathBuf {
     let bundled = sidecar::resolve_bundled_agent_paths();
     let bundled_path = match provider {
-        "claude" => bundled.claude_bin,
+        "claude" => return sidecar::resolve_claude_executable_path(),
         "codex" => bundled.codex_bin,
         "opencode" => bundled.opencode_bin,
         "kimi" => bundled.kimi_bin,
@@ -1383,11 +1383,45 @@ fn strip_ansi(input: &str) -> String {
     out
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeExecutableKind {
+    ClaudeCode,
+    ReClaude,
+}
+
+fn classify_claude_executable(path: &Path) -> ClaudeExecutableKind {
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    if stem.eq_ignore_ascii_case("reclaude") {
+        ClaudeExecutableKind::ReClaude
+    } else {
+        ClaudeExecutableKind::ClaudeCode
+    }
+}
+
+fn claude_status_args(kind: ClaudeExecutableKind) -> &'static [&'static str] {
+    match kind {
+        ClaudeExecutableKind::ClaudeCode => &["auth", "status"],
+        ClaudeExecutableKind::ReClaude => &["status"],
+    }
+}
+
+fn claude_login_args(kind: ClaudeExecutableKind) -> &'static str {
+    match kind {
+        ClaudeExecutableKind::ClaudeCode => "auth login",
+        ClaudeExecutableKind::ReClaude => "login",
+    }
+}
+
 fn claude_login_ready() -> bool {
-    let mut command = std::process::Command::new(resolve_agent_binary("claude"));
+    let binary = resolve_agent_binary("claude");
+    let kind = classify_claude_executable(&binary);
+    let mut command = std::process::Command::new(&binary);
     crate::platform::process::configure_background_cli(&mut command);
-    match command.args(["auth", "status"]).output() {
-        Ok(output) if output.status.success() => parse_claude_login_status(&output.stdout),
+    match command.args(claude_status_args(kind)).output() {
+        Ok(output) if output.status.success() => parse_claude_login_status(kind, &output.stdout),
         Ok(output) => {
             // Claude exits non-zero when the user isn't authenticated —
             // that's a normal "false" answer, not an error. Log at trace
@@ -1465,11 +1499,18 @@ fn codex_login_ready() -> bool {
     }
 }
 
-fn parse_claude_login_status(stdout: &[u8]) -> bool {
-    serde_json::from_slice::<serde_json::Value>(stdout)
-        .ok()
-        .and_then(|value| value.get("loggedIn").and_then(serde_json::Value::as_bool))
-        .unwrap_or(false)
+fn parse_claude_login_status(kind: ClaudeExecutableKind, stdout: &[u8]) -> bool {
+    match kind {
+        ClaudeExecutableKind::ClaudeCode => serde_json::from_slice::<serde_json::Value>(stdout)
+            .ok()
+            .and_then(|value| value.get("loggedIn").and_then(serde_json::Value::as_bool))
+            .unwrap_or(false),
+        ClaudeExecutableKind::ReClaude => {
+            let normalized = String::from_utf8_lossy(stdout).to_ascii_lowercase();
+            normalized.contains("authenticated")
+                || (normalized.contains("logged in") && !normalized.contains("not logged in"))
+        }
+    }
 }
 
 fn parse_codex_login_status(output: &str) -> bool {
@@ -1491,7 +1532,14 @@ fn env_var_is_present(key: &str) -> bool {
 
 fn agent_login_command(provider: &str) -> anyhow::Result<String> {
     let args = match provider {
-        "claude" => "auth login",
+        "claude" => {
+            let binary = resolve_agent_binary(provider);
+            return Ok(format!(
+                "{} {}",
+                shell_quote(&binary),
+                claude_login_args(classify_claude_executable(&binary))
+            ));
+        }
         "codex" => "login",
         "opencode" => "auth login",
         // `kimi login` runs the device-code OAuth flow in the PTY.
@@ -2284,6 +2332,55 @@ mod tests {
     }
 
     #[cfg(target_os = "macos")]
+    #[test]
+    fn classify_claude_executable_detects_reclaude() {
+        assert_eq!(
+            classify_claude_executable(std::path::Path::new("reclaude")),
+            ClaudeExecutableKind::ReClaude
+        );
+        assert_eq!(
+            classify_claude_executable(std::path::Path::new("/opt/bin/reclaude")),
+            ClaudeExecutableKind::ReClaude
+        );
+        assert_eq!(
+            classify_claude_executable(std::path::Path::new("/opt/bin/claude")),
+            ClaudeExecutableKind::ClaudeCode
+        );
+    }
+
+    #[test]
+    fn claude_login_and_status_args_follow_executable_kind() {
+        assert_eq!(
+            claude_status_args(ClaudeExecutableKind::ClaudeCode),
+            &["auth", "status"]
+        );
+        assert_eq!(
+            claude_status_args(ClaudeExecutableKind::ReClaude),
+            &["status"]
+        );
+        assert_eq!(
+            claude_login_args(ClaudeExecutableKind::ClaudeCode),
+            "auth login"
+        );
+        assert_eq!(claude_login_args(ClaudeExecutableKind::ReClaude), "login");
+    }
+
+    #[test]
+    fn parse_reclaude_login_status_accepts_authenticated_output() {
+        assert!(parse_claude_login_status(
+            ClaudeExecutableKind::ReClaude,
+            b"Status: authenticated\n"
+        ));
+        assert!(parse_claude_login_status(
+            ClaudeExecutableKind::ReClaude,
+            b"Logged in as user@example.com\n"
+        ));
+        assert!(!parse_claude_login_status(
+            ClaudeExecutableKind::ReClaude,
+            b"Not logged in\n"
+        ));
+    }
+
     #[test]
     fn applescript_shell_arg_quotes_plain_path() {
         assert_eq!(

@@ -532,12 +532,34 @@ describe("settings", () => {
 		const settings = await loadSettings();
 
 		expect(settings.opencodeProvider.cacheVersion).toBe(1);
-		expect(settings.opencodeProvider.cachedModels?.[0]?.effortLevels).toEqual([
-			"none",
-			"low",
-			"medium",
-			"high",
-			"xhigh",
-		]);
+	expect(settings.opencodeProvider.cachedModels?.[0]?.effortLevels).toEqual([
+		"none",
+		"low",
+		"medium",
+		"high",
+		"xhigh",
+	]);
+});
+
+	it("hydrates and saves the optional Claude executable path", async () => {
+		invokeMock.mockResolvedValue({
+			"app.claude_executable_path": " reclaude ",
+		});
+
+		const settings = await loadSettings();
+
+		expect(settings.claudeExecutablePath).toBe("reclaude");
+
+		invokeMock.mockResolvedValue(undefined);
+		await saveSettings({ claudeExecutablePath: "reclaude" });
+
+		expect(invokeMock).toHaveBeenLastCalledWith(
+			"update_app_settings",
+			expect.objectContaining({
+				settingsMap: expect.objectContaining({
+					"app.claude_executable_path": "reclaude",
+				}),
+			}),
+		);
 	});
 });

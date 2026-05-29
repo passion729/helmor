@@ -4,6 +4,7 @@ import {
 	ChevronDown,
 	HelpCircle,
 	Info,
+	RotateCcw,
 	Settings,
 	Volume2,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
 	SidebarGroup,
 	SidebarGroupContent,
@@ -123,6 +125,76 @@ function titleSectionLabel(
 	t: (source: string) => string,
 ): string {
 	return sidebarSectionLabel(section, repos, t);
+}
+
+function ClaudeExecutableSettingRow({
+	value,
+	onChange,
+}: {
+	value: string;
+	onChange: (value: string) => void | Promise<void>;
+}) {
+	const [draft, setDraft] = useState(value);
+
+	useEffect(() => {
+		setDraft(value);
+	}, [value]);
+
+	function commit(next: string) {
+		const trimmed = next.trim();
+		setDraft(trimmed);
+		void onChange(trimmed);
+	}
+
+	return (
+		<SettingsRow
+			align="start"
+			title="Claude executable"
+			description="Use a Claude Code-compatible wrapper such as reclaude. Empty uses Helmor's bundled Claude Code."
+		>
+			<div className="flex w-full max-w-[420px] flex-col gap-2">
+				<div className="flex items-center gap-2">
+					<Input
+						value={draft}
+						onChange={(event) => setDraft(event.target.value)}
+						onBlur={() => commit(draft)}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") {
+								event.currentTarget.blur();
+							}
+						}}
+						placeholder="Bundled Claude Code"
+						className="h-8 min-w-0 border-border/50 bg-muted/20 text-ui"
+					/>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="h-8 shrink-0 px-2.5"
+						onClick={() => commit("reclaude")}
+					>
+						Use reclaude
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon"
+						className="h-8 w-8 shrink-0"
+						aria-label="Reset Claude executable"
+						title="Reset to bundled Claude Code"
+						onClick={() => commit("")}
+					>
+						<RotateCcw className="size-3.5" />
+					</Button>
+				</div>
+				<div className="text-mini text-muted-foreground">
+					{value.trim()
+						? `Current: ${value.trim()}`
+						: "Current: bundled Claude Code"}
+				</div>
+			</div>
+		</SettingsRow>
+	);
 }
 
 export const SettingsDialog = memo(function SettingsDialog({
@@ -613,6 +685,12 @@ export const SettingsDialog = memo(function SettingsDialog({
 												patch.prFastMode = p.fastMode;
 											void updateSettings(patch);
 										}}
+									/>
+									<ClaudeExecutableSettingRow
+										value={settings.claudeExecutablePath}
+										onChange={(claudeExecutablePath) =>
+											updateSettings({ claudeExecutablePath })
+										}
 									/>
 								</SettingsGroup>
 							)}

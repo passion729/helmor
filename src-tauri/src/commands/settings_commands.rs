@@ -47,6 +47,7 @@ pub async fn update_app_settings(
     settings_map: std::collections::HashMap<String, String>,
 ) -> CmdResult<()> {
     let touched_cursor_key = settings_map.contains_key("app.cursor_provider");
+    let touched_claude_executable = settings_map.contains_key("app.claude_executable_path");
     run_blocking(move || {
         for (key, value) in &settings_map {
             if !key.starts_with("app.") && !key.starts_with("branch_prefix_") {
@@ -61,6 +62,9 @@ pub async fn update_app_settings(
     // Hot-push the key — restart would interrupt other providers.
     if touched_cursor_key {
         sidecar.push_cursor_api_key(crate::sidecar::load_cursor_api_key());
+    }
+    if touched_claude_executable {
+        sidecar.push_claude_executable_path(crate::sidecar::load_claude_executable_override());
     }
     Ok(())
 }
@@ -112,6 +116,12 @@ pub async fn get_codex_rate_limits() -> CmdResult<Option<String>> {
 #[tauri::command]
 pub async fn get_claude_rate_limits() -> CmdResult<Option<String>> {
     run_blocking(|| {
+        if crate::sidecar::claude_executable_override_is_reclaude() {
+            tracing::debug!(
+                "Skipping Claude rate limits while ReClaude executable override is active"
+            );
+            return Ok(None);
+        }
         let cached = settings::load_setting_value(settings::CLAUDE_RATE_LIMITS_KEY)?;
         if !CLAUDE_RATE_LIMITS_THROTTLE.should_fetch() {
             return Ok(cached);
