@@ -422,6 +422,11 @@ function handleUpdateConfig(id: string, params: Record<string, unknown>): void {
 			const next = typeof raw === "string" ? raw : null;
 			cursorManager.setApiKey(next);
 		}
+		if ("claudeExecutablePath" in params) {
+			const raw = params.claudeExecutablePath;
+			const next = typeof raw === "string" ? raw : null;
+			claudeManager.setClaudeExecutablePath(next);
+		}
 		emitter.pong(id);
 	} catch (err) {
 		const msg = errorMessage(err);

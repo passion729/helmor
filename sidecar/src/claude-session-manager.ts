@@ -100,8 +100,6 @@ function claudePlatformShort(): string {
 	return `${process.platform}-${arch}`;
 }
 
-const CLAUDE_BIN_PATH = resolveClaudeBinPath();
-
 // SDK's `env` option REPLACES process.env when set (per its docstring:
 // "Defaults to process.env"). Without spreading process.env back in, the
 // spawned claude-code child loses HOME / PATH / cached OAuth creds and
@@ -317,6 +315,7 @@ async function buildUserMessageWithImages(
 
 export class ClaudeSessionManager implements SessionManager {
 	private readonly sessions = new Map<string, LiveSession>();
+	private claudeBinPath = resolveClaudeBinPath();
 	private readonly pendingPermissions = new Map<
 		string,
 		(resolution: PermissionResolution) => void
@@ -335,6 +334,17 @@ export class ClaudeSessionManager implements SessionManager {
 		string,
 		{ sessionId: string; resolve: (resolution: UserInputResolution) => void }
 	>();
+
+	setClaudeExecutablePath(path: string | null): void {
+		const next = path?.trim() ? path.trim() : resolveClaudeBinPath();
+		if (next === this.claudeBinPath) return;
+		this.claudeBinPath = next;
+		logger.info("Claude executable path updated", { path: next });
+	}
+
+	private getClaudeBinPath(): string {
+		return this.claudeBinPath;
+	}
 
 	resolvePermission(
 		permissionId: string,
@@ -439,7 +449,7 @@ export class ClaudeSessionManager implements SessionManager {
 			prompt: promptSource,
 			options: {
 				abortController,
-				pathToClaudeCodeExecutable: CLAUDE_BIN_PATH,
+				pathToClaudeCodeExecutable: this.getClaudeBinPath(),
 				cwd: cwd || undefined,
 				...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
 				...(queryEnv ? { env: queryEnv } : {}),
@@ -880,7 +890,7 @@ export class ClaudeSessionManager implements SessionManager {
 			prompt: buildTitlePrompt(userMessage, branchRenamePrompt, generateBranch),
 			options: {
 				abortController,
-				pathToClaudeCodeExecutable: CLAUDE_BIN_PATH,
+				pathToClaudeCodeExecutable: this.getClaudeBinPath(),
 				...(queryEnv ? { env: queryEnv } : {}),
 				model,
 				permissionMode: "bypassPermissions",
@@ -984,7 +994,7 @@ export class ClaudeSessionManager implements SessionManager {
 			prompt: promptIter,
 			options: {
 				abortController,
-				pathToClaudeCodeExecutable: CLAUDE_BIN_PATH,
+				pathToClaudeCodeExecutable: this.getClaudeBinPath(),
 				cwd: cwd || undefined,
 				...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
 				...(queryEnv ? { env: queryEnv } : {}),
@@ -1143,7 +1153,7 @@ export class ClaudeSessionManager implements SessionManager {
 			prompt: promptIter,
 			options: {
 				abortController,
-				pathToClaudeCodeExecutable: CLAUDE_BIN_PATH,
+				pathToClaudeCodeExecutable: this.getClaudeBinPath(),
 				cwd: cwd || undefined,
 				model: model || undefined,
 				...(providerSessionId ? { resume: providerSessionId } : {}),

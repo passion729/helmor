@@ -280,6 +280,9 @@ export type AppSettings = {
 	/** How Claude Code returns thinking content. Plumbed through to the
 	 *  sidecar's `thinking.display` field. */
 	claudeThinkingDisplay: ClaudeThinkingDisplay;
+	/** Optional Claude Code-compatible executable. Empty means Helmor's
+	 *  bundled Claude Code binary. */
+	claudeExecutablePath: string;
 	/** Force the context-usage ring to always be visible. When false (the
 	 *  default), the ring auto-hides until usage crosses
 	 *  `CONTEXT_USAGE_AUTO_REVEAL_THRESHOLD`. */
@@ -378,6 +381,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	zoomLevel: 1.0,
 	followUpBehavior: "steer",
 	claudeThinkingDisplay: "summarized",
+	claudeExecutablePath: "",
 	alwaysShowContextUsage: true,
 	showUsageStats: true,
 	autoArchiveOnMerge: false,
@@ -550,6 +554,7 @@ const SETTINGS_KEY_MAP: Record<
 	zoomLevel: "app.zoom_level",
 	followUpBehavior: "app.follow_up_behavior",
 	claudeThinkingDisplay: "app.claude_thinking_display",
+	claudeExecutablePath: "app.claude_executable_path",
 	alwaysShowContextUsage: "app.always_show_context_usage",
 	showUsageStats: "app.show_usage_stats",
 	autoArchiveOnMerge: "app.auto_archive_on_merge",
@@ -1208,6 +1213,9 @@ export async function loadSettings(): Promise<AppSettings> {
 					? v
 					: DEFAULT_SETTINGS.claudeThinkingDisplay;
 			})(),
+			claudeExecutablePath:
+				raw[SETTINGS_KEY_MAP.claudeExecutablePath]?.trim() ??
+				DEFAULT_SETTINGS.claudeExecutablePath,
 			alwaysShowContextUsage:
 				raw[SETTINGS_KEY_MAP.alwaysShowContextUsage] !== undefined
 					? raw[SETTINGS_KEY_MAP.alwaysShowContextUsage] === "true"

@@ -258,6 +258,34 @@ describe("ClaudeSessionManager.sendMessage", () => {
 		expect(last).toEqual({ id: "REQ-1", type: "end" });
 	});
 
+	test("forwards a configured Claude executable path to SDK queries", async () => {
+		mockQueryImpl = () => asyncIterableFrom([{ type: "result", result: "ok" }]);
+
+		manager.setClaudeExecutablePath("reclaude");
+
+		await manager.sendMessage(
+			"REQ-RECLAUDE",
+			{
+				sessionId: "s-reclaude",
+				prompt: "ok",
+				model: "opus-1m",
+				cwd: undefined,
+				resume: undefined,
+				permissionMode: "bypassPermissions",
+				effortLevel: undefined,
+				fastMode: undefined,
+				images: [],
+			},
+			emitter,
+		);
+
+		expect(lastQueryArgs).toMatchObject({
+			options: {
+				pathToClaudeCodeExecutable: "reclaude",
+			},
+		});
+	});
+
 	test("emits contextUsageUpdated from the terminal result's usage + modelUsage, stamping the requested modelId", async () => {
 		const sdkMessages = [
 			{
